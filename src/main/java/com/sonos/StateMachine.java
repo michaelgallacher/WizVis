@@ -1,11 +1,8 @@
 package com.sonos;
 
-import javafx.beans.property.*;
+import javafx.beans.property.SimpleListProperty;
 import javafx.collections.*;
-import org.apache.commons.logging.LogFactory;
-import org.apache.commons.logging.impl.Jdk14Logger;
 import org.apache.commons.scxml2.*;
-import org.apache.commons.scxml2.env.LogUtils;
 import org.apache.commons.scxml2.env.javascript.*;
 import org.apache.commons.scxml2.model.*;
 import org.json.simple.JSONObject;
@@ -15,19 +12,29 @@ import javax.script.*;
 import java.io.IOException;
 import java.nio.charset.Charset;
 import java.nio.file.*;
+import java.security.InvalidParameterException;
 import java.util.*;
-import java.util.logging.Level;
-import java.util.stream.Collectors;
 
 public class StateMachine {
 	private SCXMLExecutor exec;
 	private ScriptEngine engine;
 	private String dataId;
 
-	private Map<String, EnterableState> idToStateMap = new HashMap<>();
+	public class StateTreeModel {
+		String id;
+		List<StateTreeModel> children = new ArrayList<>();
 
-	public ObservableList<String> allStatesProperty = FXCollections.observableArrayList();
-	public ObservableList<StateModel> currentStatesProperty = new SimpleListProperty<>(FXCollections.observableArrayList());
+		public StateTreeModel(String stateId) {
+			id = stateId;
+		}
+
+		public void add(StateTreeModel... stateIds) {
+			Collections.addAll(children, stateIds);
+		}
+	}
+
+	public ObservableList<StateTreeModel> stateTreeModelProperty = FXCollections.observableArrayList();
+	public ObservableList<StateModel> activeStatesProperty = new SimpleListProperty<>(FXCollections.observableArrayList());
 
 	public boolean Eval(String expr) {
 		try {
@@ -46,7 +53,7 @@ public class StateMachine {
 			TriggerEvent te = new TriggerEvent(event, TriggerEvent.SIGNAL_EVENT);
 			exec.triggerEvent(te);
 
-			onCurrentStateChanged(getCurrentState());
+			onActiveStatesChanged(getActiveStates());
 		} catch (ModelException e) {
 			e.printStackTrace();
 		}
@@ -54,9 +61,14 @@ public class StateMachine {
 
 	public void Initialize(SCXML scxml, String jsonPath) throws IOException, ParseException, ModelException {
 
-		Data listViewCellTemplate = scxml.getDatamodel().getData().get(0);
-		dataId = listViewCellTemplate.getId();
+		dataId = null;
+		Datamodel dm = scxml.getDatamodel();
+		if (dm != null) {
+			Data data = dm.getData().get(0);
+			dataId = data.getId();
+		}
 
+		engine = null;
 		// Read the data model json.  This will serve as the default values in the iteration below.
 		if (jsonPath != null) {
 			byte[] encodedBaseline = Files.readAllBytes(Paths.get(jsonPath));
@@ -67,12 +79,11 @@ public class StateMachine {
 			engine.put(dataId, jsonDataBaseline);
 		}
 
-		MyListener listener = new MyListener();
-
 		exec = new SCXMLExecutor(new MyJSEvaluator(), null, null);
 		exec.setStateMachine(scxml);
-		exec.addListener(scxml, listener);
 		exec.go();
+
+		Map<String, EnterableState> idToStateMap = new HashMap<>();
 
 		// Find all the reachable states in the graph.
 		Queue<EnterableState> q = new LinkedList<>();
@@ -88,87 +99,55 @@ public class StateMachine {
 			}
 		}
 
-		allStatesProperty.clear();
-		allStatesProperty.addAll(idToStateMap.keySet().stream().sorted().collect(Collectors.toList()));
+		stateTreeModelProperty.clear();
+		List<StateTreeModel> tree = populate(scxml.getChildren());
+		stateTreeModelProperty = FXCollections.observableArrayList(tree);
 
-		onCurrentStateChanged(idToStateMap.get(exec.getStateMachine().getInitial()));
+		// notify listeners there is a new state.
+		onActiveStatesChanged(idToStateMap.get(exec.getStateMachine().getInitial()));
 	}
 
-	public EnterableState[] getCurrentState() {
-		return exec.getStatus().getActiveStates().toArray(new EnterableState[]{});
+	private List<StateTreeModel> populate(List<EnterableState> states) {
+		List<StateTreeModel> parents = new ArrayList<>();
+		for (EnterableState state : states) {
+			StateTreeModel parent = new StateTreeModel(state.getId());
+			parents.add(parent);
+			if (state instanceof TransitionalState) {
+				TransitionalState ts = (TransitionalState) state;
+				parent.add(populate(ts.getChildren()).toArray(new StateTreeModel[]{}));
+			}
+		}
+		return parents;
+	}
+
+	public EnterableState[] getActiveStates() {
+		Set<EnterableState> activeStates = exec.getStatus().getActiveStates();
+		return activeStates.toArray(new EnterableState[activeStates.size()]);
 	}
 
 	public JSONObject getDatamodelJSON() {
+		if (dataId == null || dataId.isEmpty()) {
+			return new JSONObject();
+		}
 		return (JSONObject) engine.get(dataId);
 	}
 
-	private void onCurrentStateChanged(EnterableState newCurrentState) {
-		onCurrentStateChanged(new EnterableState[]{newCurrentState});
+	private void onActiveStatesChanged(EnterableState newCurrentState) {
+		onActiveStatesChanged(new EnterableState[]{newCurrentState});
 	}
 
-	private void onCurrentStateChanged(EnterableState[] newCurrentStates) {
-
-		// Update the property.
-		currentStatesProperty.clear();
+	private void onActiveStatesChanged(EnterableState[] newCurrentStates) {
+		activeStatesProperty.clear();
 		for (EnterableState newState : newCurrentStates) {
-
 			if (!(newState instanceof TransitionalState)) {
-				continue;
+				throw new InvalidParameterException();
 			}
-
-			currentStatesProperty.add(new StateModel(newState));
-		}
-	}
-
-	private final class MyListener implements SCXMLListener {
-		private Jdk14Logger log = (Jdk14Logger) LogFactory.getLog(getClass());
-		private List<List<Integer>> successfulWalks = new ArrayList<>();
-		private LinkedList<ArrayList<Integer>> transitionsInCurrentWalk = new LinkedList<>();
-		private boolean invalidTransition = false;
-
-		MyListener() {
-			log.getLogger().setLevel(Level.OFF);
-			transitionsInCurrentWalk.push(new ArrayList<>());
+			activeStatesProperty.add(new StateModel(newState));
 		}
 
-		@Override
-		public void onEntry(EnterableState state) {
-		}
-
-		@Override
-		public void onExit(EnterableState state) {
-		}
-
-		@Override
-		public void onTransition(TransitionTarget from, TransitionTarget to, Transition transition, String event) {
-			ArrayList<Integer> walked = transitionsInCurrentWalk.peek();
-			// Here's where things get interesting.
-			// If we have seen this transition and it's not the only one, then skip it.
-			if (walked.contains(transition.getObservableId())) {
-				EnterableState enterable = idToStateMap.get(from.getId());
-				if (enterable instanceof TransitionalState) {
-					TransitionalState fromState = (TransitionalState) enterable;
-					List<Transition> transitions = fromState.getTransitionsList();
-					invalidTransition = transitions.size() != 1;
-				}
-			}
-
-			if (!invalidTransition) {
-				walked.add(transition.getObservableId());
-
-				if (log.isInfoEnabled()) {
-					log.info("transition #" + transition.getObservableId() + ": " + LogUtils.transToString(from, to, transition, event));
-				}
-			}
-		}
-
-		List<Integer> CurrentWalk() {
-			return Collections.unmodifiableList(transitionsInCurrentWalk.peek());
-		}
-
-		List<List<Integer>> SuccessfulWalks() {
-			return Collections.unmodifiableList(successfulWalks);
-		}
+		activeStatesProperty.sort((o1, o2) -> {
+			return (o1.getId().length() > o2.getId().length()) ? -1 : (o1.getId().length() < o2.getId().length() ? 1 : 0);
+		});
 	}
 
 	private final class MyJSEvaluator extends JSEvaluator {
@@ -184,8 +163,7 @@ public class StateMachine {
 		}
 
 		@Override
-		public void evalAssign(final Context ctx, final String location, final Object data, final AssignType type,
-							   final String attr) throws SCXMLExpressionException {
+		public void evalAssign(final Context ctx, final String location, final Object data, final AssignType type, final String attr) throws SCXMLExpressionException {
 			super.evalAssign(ctx, location, data, type, attr);
 		}
 	}

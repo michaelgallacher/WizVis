@@ -1,23 +1,26 @@
 package com.sonos;
 
-import javafx.geometry.Insets;
+import javafx.collections.ObservableList;
+import javafx.event.EventHandler;
+import javafx.scene.Node;
 import javafx.scene.control.*;
 import javafx.scene.input.MouseEvent;
-import javafx.scene.layout.HBox;
-import org.apache.commons.scxml2.model.Transition;
+import javafx.scene.layout.*;
 
 public class TransitionCell extends ListCell<StateModel> {
 
-	private Button eventButton = new Button();
-	private Label conditionLabel = new Label();
+	private Label stateLabel = new Label();
+	private VBox transitionItems = new VBox();
+	private VBox root = new VBox();
+
 	private Controller controller;
 
 	public TransitionCell(Controller xmlModel) {
 		controller = xmlModel;
-		eventButton.setFocusTraversable(false);
-	}
 
-	public void updateSelected(boolean update) {
+		root.getChildren().add(stateLabel);
+		stateLabel.getStyleClass().add("statenamebutton");
+		root.getChildren().add(transitionItems);
 	}
 
 	@Override
@@ -25,38 +28,51 @@ public class TransitionCell extends ListCell<StateModel> {
 		// calling super here is very important - don't skip this!
 		super.updateItem(item, empty);
 
-		if (empty) {
+		if (empty || item == null || item.getTransitions().size() == 0) {
 			setGraphic(null);
 			return;
 		}
 
-		if (item == null) {
-			eventButton.setText("");
-			return;
-		}
+		stateLabel.setText(item.getId());
 
-		HBox hbox = new HBox();
-		String condition = item.getTransitions().get(0).getCond();
-		if(condition != null) {
-			boolean eval = controller.Eval(condition);
-			eventButton.setDisable(!eval);
-		}
-		eventButton.setText(item.getTransitions().get(0).getEvent());
-		eventButton.setOnMouseClicked(this::onClick);
-		eventButton.setPadding(new Insets(4));
+		// Remove the previous entries and add the new.
+		ObservableList<Node> items = transitionItems.getChildren();
+		items.clear();
+		item.getTransitions().forEach(tm -> items.add(new TransitionContainer(tm, this::onClick)));
 
-		hbox.getChildren().add(eventButton);
-
-		conditionLabel.setText(condition);
-		conditionLabel.setWrapText(false);
-		conditionLabel.prefHeightProperty().bind(eventButton.heightProperty());
-		conditionLabel.setPadding(new Insets(4));
-
-		hbox.getChildren().add(conditionLabel);
-		setGraphic(hbox);
+		setGraphic(root);
 	}
 
 	private void onClick(MouseEvent e) {
-		controller.FireEvent(eventButton.getText());
+		Button src = (Button) e.getSource();
+		controller.FireEvent(src.getText());
+	}
+
+	private class TransitionContainer extends HBox {
+		private Button eventButton = new Button();
+		private Label targetLabel = new Label();
+		private Label conditionLabel = new Label();
+
+		public TransitionContainer(TransitionModel tm, EventHandler<MouseEvent> ev) {
+			getStyleClass().add("TransitionContainer");
+
+			getChildren().addAll(eventButton, targetLabel);
+
+			eventButton.setText(tm.getEvent());
+			eventButton.setOnMouseClicked(ev);
+
+			targetLabel.setText(tm.getTarget());
+			targetLabel.minHeightProperty().bind(eventButton.heightProperty());
+			targetLabel.getStyleClass().add("targetnamelabel");
+
+			String condition = tm.getCond();
+			if (condition != null) {
+				boolean eval = controller.Eval(condition);
+				eventButton.setDisable(!eval);
+			}
+
+			conditionLabel.setText(condition);
+			//	conditionLabel.setPadding(new Insets(4));
+		}
 	}
 }

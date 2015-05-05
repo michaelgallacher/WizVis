@@ -3,20 +3,32 @@
     -fx-border-color: gray;
  }
 
- .button:hover {
+.button:hover {
      -fx-background-color: linear-gradient(#2A5058, #61a2b1);
- }
+}
 
 .button:disabled {
     -fx-background-color: darkgray;
 }
 
- .label-temp {
-    -fx-background-color:red
+.TransitionContainer {
+    -fx-padding: 4;
+}
+
+.statenamebutton {
+    -fx-font: bold 18 sans-serif;
+}
+
+.targetnamelabel {
+    -fx-padding: 4;
+}
+
+.label {
+  /*  -fx-background-color: red;*/
  }
 
 .PropertySheet {
--fx-background-color:red
+    -fx-background-color: green;
 }
 
 .button {
