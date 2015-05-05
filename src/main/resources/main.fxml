@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?scenebuilder-stylesheet default.css?>
+
+<?import javafx.scene.control.*?>
+<?import javafx.scene.image.ImageView?>
+<?import javafx.scene.layout.*?>
+<AnchorPane xmlns="http://javafx.com/javafx/8" xmlns:fx="http://javafx.com/fxml/1">
+	<BorderPane prefHeight="600.0" prefWidth="800.0" AnchorPane.bottomAnchor="0.0" AnchorPane.leftAnchor="0.0" AnchorPane.rightAnchor="0.0" AnchorPane.topAnchor="0.0">
+		<center>
+			<SplitPane id="splitPane" dividerPositions="0.3" prefHeight="160.0" prefWidth="300" BorderPane.alignment="CENTER">
+				<Accordion id="accordion" styleClass="big-border" BorderPane.alignment="CENTER">
+					<panes>
+						<TitledPane animated="false" text="States">
+							<ListView id="statesListView" minHeight="0.0" minWidth="0.0" prefHeight="180.0" prefWidth="200.0"/>
+						</TitledPane>
+						<TitledPane id="dataModelPropertiesPane" animated="false" text="Data Model">
+							<!--Must be constructed with the observable list from the controller-->
+							<!--<PropertySheet id="dataModelPropertiesView" minHeight="0.0" minWidth="0.0" prefHeight="180.0" prefWidth="200.0"/>-->
+						</TitledPane>
+					</panes>
+				</Accordion>
+				<TabPane prefWidth="400">
+					<Tab text="Design" closable="false">
+						<SplitPane id="stateTransitionSplitPane" dividerPositions="0.6" prefHeight="160.0" prefWidth="200" orientation="VERTICAL">
+							<AnchorPane minHeight="0.0" minWidth="0.0" prefHeight="160.0" prefWidth="100.0">
+								<VBox AnchorPane.bottomAnchor="0.0" AnchorPane.leftAnchor="0.0" AnchorPane.rightAnchor="0.0" AnchorPane.topAnchor="0.0">
+									<ImageView id="imageView"/>
+									<Label id="currentStateLabel" text="hi" prefWidth="300" textAlignment="RIGHT"/>
+								</VBox>
+							</AnchorPane>
+							<!--<AnchorPane  minHeight="0.0" minWidth="0.0" prefHeight="160.0" prefWidth="50">-->
+							<ListView id="transitionsListView" minHeight="0.0" minWidth="0.0" prefHeight="180.0" prefWidth="50.0" AnchorPane.bottomAnchor="0.0" AnchorPane.leftAnchor="0.0" AnchorPane.rightAnchor="0.0" AnchorPane.topAnchor="0.0"/>
+							<!--</AnchorPane>-->
+						</SplitPane>
+					</Tab>
+					<Tab text="XML" closable="false">
+						<TextArea fx:id="xmlViewer" minHeight="0.0" minWidth="0.0" prefHeight="180.0" prefWidth="200.0"/>
+					</Tab>
+				</TabPane>
+			</SplitPane>
+		</center>
+		<top>
+			<ToolBar id="toolbar" prefHeight="40.0" prefWidth="200.0">
+				<SplitMenuButton id="splitOpenButton" mnemonicParsing="false" text="Open..."/>
+			</ToolBar>
+		</top>
+	</BorderPane>
+</AnchorPane>

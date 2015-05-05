@@ -11,12 +11,13 @@
     </content>
     <orderEntry type="inheritedJdk" />
     <orderEntry type="sourceFolder" forTests="false" />
-    <orderEntry type="library" name="commons-scxml2-2.0-SNAPSHOT" level="project" />
     <orderEntry type="library" name="commons-logging:commons-logging:1.2" level="project" />
     <orderEntry type="library" name="org.apache.commons:commons-jexl:2.1.1" level="project" />
+    <orderEntry type="library" name="lib" level="project" />
     <orderEntry type="library" name="Maven: org.apache.commons:commons-jexl:2.1.1" level="project" />
     <orderEntry type="library" name="Maven: commons-logging:commons-logging:1.1.1" level="project" />
     <orderEntry type="library" name="Maven: org.controlsfx:controlsfx:8.20.8" level="project" />
     <orderEntry type="library" name="Maven: org.controlsfx:openjfx-dialogs:1.0.2" level="project" />
+    <orderEntry type="library" name="com.googlecode.json-simple:json-simple:1.1.1" level="project" />
   </component>
 </module>

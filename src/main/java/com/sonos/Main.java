@@ -1,22 +1,20 @@
 package com.sonos;
 
 import javafx.application.Application;
-import javafx.collections.ObservableList;
+import javafx.collections.*;
 import javafx.event.ActionEvent;
 import javafx.fxml.FXMLLoader;
 import javafx.scene.*;
 import javafx.scene.control.*;
+import javafx.scene.image.ImageView;
 import javafx.scene.input.MouseEvent;
 import javafx.stage.*;
-import org.apache.commons.scxml2.io.SCXMLReader;
-import org.apache.commons.scxml2.model.SCXML;
 import org.controlsfx.control.PropertySheet;
 import org.controlsfx.dialog.ExceptionDialog;
 
 import java.io.*;
 import java.lang.annotation.*;
 import java.lang.reflect.Field;
-import java.nio.charset.Charset;
 import java.nio.file.*;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -25,28 +23,28 @@ public class Main extends Application {
 
 	final int MAX_MRU_SIZE = 10;
 
-	Controller controller = new Controller();
+	private Controller controller = new Controller();
 
-	Properties applicationProps = new Properties();
+	private Properties applicationProps = new Properties();
 
-	Window mainWindow;
+	private Window mainWindow;
 
 	@SceneNode
 	TextArea xmlViewer;
 	@SceneNode
 	ListView<String> statesListView;
 	@SceneNode
-	ListView<String> transitionsListView;
+	ListView<StateModel> transitionsListView;
 	@SceneNode
 	Label currentStateLabel;
 	@SceneNode
 	SplitMenuButton splitOpenButton;
 	@SceneNode
 	PropertySheet dataModelPropertiesView;
-
 	@SceneNode
 	TitledPane dataModelPropertiesPane;
-
+	@SceneNode
+	ImageView imageView;
 
 	@Override
 	public void stop() throws Exception {
@@ -67,7 +65,7 @@ public class Main extends Application {
 		primaryStage.setMinHeight(400);
 		primaryStage.setTitle("WizVis");
 
-		Parent root = FXMLLoader.load(getClass().getResource("/sample.fxml"));
+		Parent root = FXMLLoader.load(getClass().getResource("/main.fxml"));
 		Scene scene = new Scene(root);
 		scene.getStylesheets().add("/default.css");
 		primaryStage.setScene(scene);
@@ -93,10 +91,9 @@ public class Main extends Application {
 			//e.printStackTrace();
 		}
 
-		// current state
-		currentStateLabel.textProperty().bind(controller.currentStateProperty);
 		statesListView.setItems(controller.allStatesProperty);
-		transitionsListView.setItems(controller.currentTransitionsProperty);
+
+		transitionsListView.setItems(controller.currentStatesProperty);
 		transitionsListView.setCellFactory(list -> new TransitionCell(controller));
 		transitionsListView.setFocusTraversable(false);
 
@@ -107,6 +104,15 @@ public class Main extends Application {
 
 		splitOpenButton = (SplitMenuButton) scene.lookup("#splitOpenButton");
 		splitOpenButton.setOnMouseClicked(this::onClick);
+
+		controller.currentStatesProperty.addListener((ListChangeListener<StateModel>) c -> {
+			if(c.getList().size() > 0) {
+				currentStateLabel.setText(c.getList().get(0).getName());
+			}
+			else {
+				currentStateLabel.setText("");
+			}
+		});
 	}
 
 	private void onMenuItemClick(ActionEvent e) {
@@ -131,9 +137,7 @@ public class Main extends Application {
 			xmlViewer.setText(scxmlText);
 
 			// Take that string and parse it.
-			InputStream is = new ByteArrayInputStream(scxmlText.getBytes(Charset.defaultCharset()));
-			SCXML scxml = SCXMLReader.read(is);
-			controller.Initialize(scxml);
+			controller.Initialize(path);
 
 			// See if this path is already in the MRU. If so, remove all instances of it
 			// and let it be inserted at the top again.
@@ -147,7 +151,7 @@ public class Main extends Application {
 			mi.setOnAction(this::onMenuItemClick);
 			items.add(0, mi);
 		} catch (Exception e1) {
-			ExceptionDialog d = new ExceptionDialog(new IOException());
+			ExceptionDialog d = new ExceptionDialog(e1);
 			d.setTitle("Error");
 			d.setHeaderText("Error while opening: " + path);
 			d.showAndWait();
