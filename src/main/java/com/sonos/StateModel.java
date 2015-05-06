@@ -4,11 +4,11 @@ import org.apache.commons.scxml2.model.*;
 
 import java.util.*;
 
-public class StateModel {
-	private String id;
-	private List<TransitionModel> transitions = new ArrayList<>();
+class StateModel {
+	private final String id;
+	private final List<TransitionModel> transitions = new ArrayList<>();
 
-	public StateModel(EnterableState state) {
+	StateModel(EnterableState state) {
 		id = state.getId();
 		if (state instanceof TransitionalState) {
 			TransitionalState tstate = (TransitionalState) state;
@@ -16,7 +16,7 @@ public class StateModel {
 		}
 	}
 
-	public String getId() { return id;}
+	String getId() { return id;}
 
-	public List<TransitionModel> getTransitions() {return transitions;}
+	List<TransitionModel> getTransitions() {return transitions;}
 }

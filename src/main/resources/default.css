@@ -15,7 +15,7 @@
     -fx-padding: 4;
 }
 
-.statenamebutton {
+.statename {
     -fx-font: bold 18 sans-serif;
 }
 
@@ -23,9 +23,11 @@
     -fx-padding: 4;
 }
 
+/*
 .label {
-  /*  -fx-background-color: red;*/
+   -fx-background-color: red;
  }
+*/
 
 .PropertySheet {
     -fx-background-color: green;

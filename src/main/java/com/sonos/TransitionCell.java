@@ -7,19 +7,19 @@ import javafx.scene.control.*;
 import javafx.scene.input.MouseEvent;
 import javafx.scene.layout.*;
 
-public class TransitionCell extends ListCell<StateModel> {
+class TransitionCell extends ListCell<StateModel> {
 
-	private Label stateLabel = new Label();
-	private VBox transitionItems = new VBox();
-	private VBox root = new VBox();
+	private final Label stateLabel = new Label();
+	private final VBox transitionItems = new VBox();
+	private final VBox root = new VBox();
 
-	private Controller controller;
+	private final Controller controller;
 
-	public TransitionCell(Controller xmlModel) {
+	TransitionCell(Controller xmlModel) {
 		controller = xmlModel;
 
 		root.getChildren().add(stateLabel);
-		stateLabel.getStyleClass().add("statenamebutton");
+		stateLabel.getStyleClass().add("statename");
 		root.getChildren().add(transitionItems);
 	}
 
@@ -28,7 +28,7 @@ public class TransitionCell extends ListCell<StateModel> {
 		// calling super here is very important - don't skip this!
 		super.updateItem(item, empty);
 
-		if (empty || item == null || item.getTransitions().size() == 0) {
+		if (empty || item == null || item.getTransitions().isEmpty()) {
 			setGraphic(null);
 			return;
 		}
@@ -45,18 +45,19 @@ public class TransitionCell extends ListCell<StateModel> {
 
 	private void onClick(MouseEvent e) {
 		Button src = (Button) e.getSource();
-		controller.FireEvent(src.getText());
+		controller.fireEvent(src.getText());
 	}
 
-	private class TransitionContainer extends HBox {
-		private Button eventButton = new Button();
-		private Label targetLabel = new Label();
-		private Label conditionLabel = new Label();
+	private class TransitionContainer extends BorderPane {
+		private final Button eventButton = new Button();
+		private final Label targetLabel = new Label();
+		private final Label conditionLabel = new Label();
 
-		public TransitionContainer(TransitionModel tm, EventHandler<MouseEvent> ev) {
+		TransitionContainer(TransitionModel tm, EventHandler<MouseEvent> ev) {
 			getStyleClass().add("TransitionContainer");
 
-			getChildren().addAll(eventButton, targetLabel);
+			setLeft(eventButton);
+			setCenter(targetLabel);
 
 			eventButton.setText(tm.getEvent());
 			eventButton.setOnMouseClicked(ev);
@@ -67,12 +68,16 @@ public class TransitionCell extends ListCell<StateModel> {
 
 			String condition = tm.getCond();
 			if (condition != null) {
-				boolean eval = controller.Eval(condition);
+				boolean eval = controller.eval(condition);
 				eventButton.setDisable(!eval);
+				conditionLabel.setVisible(!eval);
+				conditionLabel.setText(condition);
+				if (!eval) {
+					setBottom(conditionLabel);
+				}
+			} else {
+				eventButton.setDisable(false);
 			}
-
-			conditionLabel.setText(condition);
-			//	conditionLabel.setPadding(new Insets(4));
 		}
 	}
 }

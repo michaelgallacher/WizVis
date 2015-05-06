@@ -15,28 +15,18 @@ import java.nio.file.*;
 import java.security.InvalidParameterException;
 import java.util.*;
 
-public class StateMachine {
+final class StateMachine {
 	private SCXMLExecutor exec;
 	private ScriptEngine engine;
 	private String dataId;
 
-	public class StateTreeModel {
-		String id;
-		List<StateTreeModel> children = new ArrayList<>();
-
-		public StateTreeModel(String stateId) {
-			id = stateId;
-		}
-
-		public void add(StateTreeModel... stateIds) {
-			Collections.addAll(children, stateIds);
-		}
-	}
 
 	public ObservableList<StateTreeModel> stateTreeModelProperty = FXCollections.observableArrayList();
-	public ObservableList<StateModel> activeStatesProperty = new SimpleListProperty<>(FXCollections.observableArrayList());
+	public final ObservableList<StateModel> activeStatesProperty = new SimpleListProperty<>(FXCollections.observableArrayList());
 
-	public boolean Eval(String expr) {
+	public ScriptEngine getEngine() { return engine; }
+
+	public boolean eval(String expr) {
 		try {
 			Object result = engine.eval(expr);
 			if (result instanceof Boolean) {
@@ -48,7 +38,7 @@ public class StateMachine {
 		return false;
 	}
 
-	public void FireEvent(String event) {
+	public void fireEvent(String event) {
 		try {
 			TriggerEvent te = new TriggerEvent(event, TriggerEvent.SIGNAL_EVENT);
 			exec.triggerEvent(te);
@@ -59,7 +49,7 @@ public class StateMachine {
 		}
 	}
 
-	public void Initialize(SCXML scxml, String jsonPath) throws IOException, ParseException, ModelException {
+	public void initialize(SCXML scxml, String jsonPath) throws IOException, ParseException, ModelException {
 
 		dataId = null;
 		Datamodel dm = scxml.getDatamodel();
@@ -114,13 +104,17 @@ public class StateMachine {
 			parents.add(parent);
 			if (state instanceof TransitionalState) {
 				TransitionalState ts = (TransitionalState) state;
-				parent.add(populate(ts.getChildren()).toArray(new StateTreeModel[]{}));
+				parent.addChildren(populate(ts.getChildren()));
 			}
 		}
 		return parents;
 	}
 
-	public EnterableState[] getActiveStates() {
+	public void refresh() {
+		onActiveStatesChanged(getActiveStates());
+	}
+
+	private EnterableState[] getActiveStates() {
 		Set<EnterableState> activeStates = exec.getStatus().getActiveStates();
 		return activeStates.toArray(new EnterableState[activeStates.size()]);
 	}
@@ -145,9 +139,7 @@ public class StateMachine {
 			activeStatesProperty.add(new StateModel(newState));
 		}
 
-		activeStatesProperty.sort((o1, o2) -> {
-			return (o1.getId().length() > o2.getId().length()) ? -1 : (o1.getId().length() < o2.getId().length() ? 1 : 0);
-		});
+		activeStatesProperty.sort((o1, o2) -> (o1.getId().length() > o2.getId().length()) ? -1 : (o1.getId().length() < o2.getId().length() ? 1 : 0));
 	}
 
 	private final class MyJSEvaluator extends JSEvaluator {

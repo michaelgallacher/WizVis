@@ -7,10 +7,11 @@ import javafx.stage.Stage;
 
 public class Main extends Application {
 
-	Controller controller;
+	private Controller controller;
 
 	@Override
 	public void stop() throws Exception {
+		super.stop();
 		controller.saveAppConfig();
 	}
 

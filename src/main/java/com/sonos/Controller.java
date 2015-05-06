@@ -19,65 +19,38 @@ import java.nio.file.*;
 import java.util.*;
 import java.util.stream.Collectors;
 
-public class Controller {
-	final int MAX_MRU_SIZE = 10;
-	public StateMachine stateMachine = new StateMachine();
-	public ObservableList<PropertySheet.Item> dataModelItems = FXCollections.observableArrayList();
+public final class Controller {
+	private static final int MAX_MRU_SIZE = 10;
+	private final StateMachine stateMachine = new StateMachine();
+	private final ObservableList<PropertySheet.Item> dataModelItems = FXCollections.observableArrayList();
+	private final Properties applicationProps = new Properties();
 
-	@FXML
-	TextArea xmlViewer;
-	@FXML
-	TreeView<String> statesTreeView;
-	@FXML
-	ListView<StateModel> transitionsListView;
-	@FXML
-	Label currentStateLabel;
-	@FXML
-	SplitMenuButton splitOpenButton;
-	@FXML
-	PropertySheet dataModelPropertiesView;
-	@FXML
-	TitledPane dataModelPropertiesPane;
-	@FXML
-	ImageView imageView;
-
-	private Properties applicationProps = new Properties();
-	private Window mainWindow;
 	// Shame we can't bind this to the SplitButton items.
-	private ObservableList<String> mruList = FXCollections.observableArrayList();
+	private final ObservableList<String> mruList = FXCollections.observableArrayList();
+	@FXML
+	private TextArea logWindow;
+	@FXML
+	private TextArea xmlViewer;
+	@FXML
+	private TreeView<String> statesTreeView;
+	@FXML
+	private ListView<StateModel> transitionsListView;
+	@FXML
+	private Label currentStateLabel;
+	@FXML
+	private SplitMenuButton splitOpenButton;
+	@FXML
+	private TitledPane dataModelPropertiesPane;
+	@FXML
+	private ImageView imageView;
+	private Window mainWindow;
 
-	public boolean Eval(String expr) {
-		return stateMachine.Eval(expr);
+	public boolean eval(String expr) {
+		return stateMachine.eval(expr);
 	}
 
-	public void FireEvent(String event) {
-		stateMachine.FireEvent(event);
-	}
-
-	@SuppressWarnings("deprecation,unchecked")
-	public void Initialize(String path) throws IOException, ModelException, XMLStreamException, ParseException {
-
-		File file = new File(path);
-		SCXML scxml = SCXMLReader.read(file.toURL());
-		Datamodel dm = scxml.getDatamodel();
-		String jsonPath = null;
-		if (dm != null) {
-			Data d = dm.getData().get(0);
-			jsonPath = d.getSrc();
-			if (jsonPath != null) {
-				Path tmpPath = file.toPath().getParent().resolve(jsonPath);
-				jsonPath = tmpPath.toString();
-			}
-		}
-
-		stateMachine.Initialize(scxml, jsonPath);
-
-		dataModelItems.clear();
-		Set<Map.Entry> entries = stateMachine.getDatamodelJSON().entrySet();
-		for (Map.Entry entry : entries) {
-			PropertySheet.Item item = new DataModelProperty(entry.getKey().toString(), entry.getValue().toString(), String.class);
-			dataModelItems.add(item);
-		}
+	public void fireEvent(String event) {
+		stateMachine.fireEvent(event);
 	}
 
 	// Called by the FXMLLoader
@@ -90,16 +63,16 @@ public class Controller {
 		transitionsListView.setFocusTraversable(false);
 
 		// Can't be done in fxml because binding must be done at construction.
-		dataModelPropertiesView = new PropertySheet(dataModelItems);
+		PropertySheet dataModelPropertiesView = new PropertySheet(dataModelItems);
 		dataModelPropertiesPane.setContent(dataModelPropertiesView);
 		dataModelPropertiesView.getStyleClass().add("PropertySheet");
 
 		//splitOpenButton = (SplitMenuButton) scene.lookup("#splitOpenButton");
-		splitOpenButton.setOnMouseClicked(this::onClick);
+		splitOpenButton.setOnMouseClicked(this::onOpenClick);
 
 		stateMachine.activeStatesProperty.addListener((ListChangeListener<StateModel>) change -> {
 			ObservableList<? extends StateModel> list = change.getList();
-			if (list.size() > 0) {
+			if (!list.isEmpty()) {
 				currentStateLabel.setText(list.get(0).getId());
 			} else {
 				currentStateLabel.setText("<no states>");
@@ -135,7 +108,7 @@ public class Controller {
 			populateMRU(mruList);
 
 		} catch (Exception e) {
-			// All done reading properties.
+			// Finished reading properties.
 			//e.printStackTrace();
 		}
 	}
@@ -147,7 +120,7 @@ public class Controller {
 	 */
 	void saveAppConfig() throws Exception {
 		System.out.println("saving appConfig");
-		if (mruList.size() > 0) {
+		if (!mruList.isEmpty()) {
 			try (FileOutputStream outStream = new FileOutputStream("appConfig")) {
 				int COUNT = Math.min(MAX_MRU_SIZE, mruList.size());
 				for (int i = 0; i < COUNT; i++) {
@@ -158,17 +131,53 @@ public class Controller {
 		}
 	}
 
-	private void onClick(MouseEvent e) {
-		FileChooser fileChooser = new FileChooser();
-		File file = fileChooser.showOpenDialog(mainWindow);
-		if (file != null) {
-			openFile(file);
+	private void addChildren(TreeItem<String> parent, StateTreeModel child) {
+		TreeItem<String> childItem = new TreeItem<>(child.getId());
+		parent.getChildren().add(childItem);
+		child.getChildren().forEach(grandchild -> addChildren(childItem, grandchild));
+		parent.setExpanded(true);
+	}
+
+	@SuppressWarnings("unchecked")
+	private void initialize(String path) throws IOException, ModelException, XMLStreamException, ParseException {
+
+		File file = new File(path);
+		SCXML scxml = SCXMLReader.read(file.toURI().toURL());
+		Datamodel dm = scxml.getDatamodel();
+		String jsonPath = null;
+		if (dm != null) {
+			Data data = dm.getData().get(0);
+			jsonPath = data.getSrc();
+			if (jsonPath == null) {
+				jsonPath = data.getExpr();
+			}
+			if (jsonPath != null) {
+				Path tmpPath = file.toPath().getParent().resolve(jsonPath);
+				jsonPath = tmpPath.toString();
+			}
+		}
+
+		stateMachine.initialize(scxml, jsonPath);
+
+		dataModelItems.clear();
+		Set<Map.Entry> entries = stateMachine.getDatamodelJSON().entrySet();
+		for (Map.Entry entry : entries) {
+			PropertySheet.Item item = new DataModelProperty(stateMachine, entry.getKey().toString(), entry.getValue().toString(), String.class);
+			dataModelItems.add(item);
 		}
 	}
 
 	private void onMenuItemClick(ActionEvent e) {
 		MenuItem mi = (MenuItem) e.getSource();
 		openFile(new File(mi.getId()));
+	}
+
+	private void onOpenClick(MouseEvent e) {
+		FileChooser fileChooser = new FileChooser();
+		File file = fileChooser.showOpenDialog(mainWindow);
+		if (file != null) {
+			openFile(file);
+		}
 	}
 
 	private void openFile(File file) {
@@ -180,13 +189,13 @@ public class Controller {
 			xmlViewer.setText(scxmlText);
 
 			// Take that string and parse it.
-			this.Initialize(path);
+			this.initialize(path);
 
 			// See if this path is already in the MRU. If so, remove all instances of it
 			// and let it be inserted at the top again.
 
 			// Absolutely awful we can't bind the mru list to the menu item.
-			List<String> oldMenuItems = mruList.stream().filter(m -> m.equals(path)).collect(Collectors.toList());
+			List<String> oldMenuItems = mruList.stream().filter(mi -> mi.equals(path)).collect(Collectors.toList());
 			oldMenuItems.stream().forEach(mruList::remove);
 			mruList.add(0, path);
 
@@ -194,53 +203,47 @@ public class Controller {
 			populateTree();
 
 		} catch (Exception e1) {
-			ExceptionDialog d = new ExceptionDialog(e1);
-			d.setTitle("Error");
-			d.setHeaderText("Error while opening: " + path);
-			d.showAndWait();
+			ExceptionDialog dialog = new ExceptionDialog(e1);
+			dialog.setTitle("Error");
+			dialog.setHeaderText("Error while opening: " + path);
+			dialog.showAndWait();
 		}
 	}
 
-	private void populateMRU(List<String> source) {
+	private void populateMRU(Iterable<String> source) {
 		ObservableList<MenuItem> items = splitOpenButton.getItems();
 		items.clear();
 		for (String mruPath : source) {
 			Path path = new File(mruPath).toPath();
 			MenuItem mi = new MenuItem(path.getFileName().toString());
+			mi.setMnemonicParsing(false);
 			mi.setOnAction(this::onMenuItemClick);
 			mi.setId(mruPath);
 			items.add(mi);
 		}
 	}
 
-	private void addChildren(TreeItem<String> parent, StateMachine.StateTreeModel child) {
-		TreeItem<String> childItem = new TreeItem<>(child.id);
-		parent.getChildren().add(childItem);
-		child.children.forEach(grandchidl -> addChildren(childItem, grandchidl));
-		parent.setExpanded(true);
-	}
-
 	private void populateTree() {
 		TreeItem<String> root = new TreeItem<>("root");
-		List<StateMachine.StateTreeModel> tree = stateMachine.stateTreeModelProperty;
-		for (StateMachine.StateTreeModel child : tree) {
+		List<StateTreeModel> tree = stateMachine.stateTreeModelProperty;
+		for (StateTreeModel child : tree) {
 			addChildren(root, child);
 		}
 		statesTreeView.setRoot(root);
 	}
 
-	public class DataModelProperty implements PropertySheet.Item {
+	private static final class DataModelProperty implements PropertySheet.Item {
 
-		Datamodel dataModel;
-		Class<?> dataType;
-		String dataId;
-		String dataValue;
+		private final Class<?> dataType;
+		private final String dataId;
+		private final String dataValue;
+		private final StateMachine stateMachine;
 
-		public DataModelProperty(String id, String value, Class<?> type) {//}, Datamodel model) {
-			//	dataModel = model;
+		DataModelProperty(StateMachine sm, String id, String value, Class<?> type) {
 			dataType = type;
 			dataId = id;
 			dataValue = value;
+			stateMachine = sm;
 		}
 
 		@Override
@@ -270,7 +273,10 @@ public class Controller {
 
 		@Override
 		public void setValue(Object o) {
-
+			if (!dataValue.equals(o)) {
+				stateMachine.getEngine().put(getName(), o);
+				stateMachine.refresh();
+			}
 		}
 	}
 }
