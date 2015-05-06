@@ -12,6 +12,7 @@ import org.apache.commons.scxml2.model.*;
 import org.controlsfx.control.PropertySheet;
 import org.controlsfx.dialog.ExceptionDialog;
 import org.json.simple.parser.ParseException;
+import org.w3c.dom.Node;
 
 import javax.xml.stream.XMLStreamException;
 import java.io.*;
@@ -147,7 +148,9 @@ public final class Controller {
 		String jsonPath = null;
 		if (dm != null) {
 			Data data = dm.getData().get(0);
-			jsonPath = data.getSrc();
+			Node n = data.getNode();
+			n.getAttributes();
+			jsonPath = n.getLocalName();
 			if (jsonPath == null) {
 				jsonPath = data.getExpr();
 			}
@@ -184,6 +187,8 @@ public final class Controller {
 		Path filePath = file.toPath();
 		String path = filePath.toString();
 		try {
+			SCXMLValidator.validate(path);
+
 			// Load our xml and show it.
 			String scxmlText = new String(Files.readAllBytes(filePath));
 			xmlViewer.setText(scxmlText);
