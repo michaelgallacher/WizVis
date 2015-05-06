@@ -25,7 +25,7 @@
 					<TabPane prefWidth="400">
 						<Tab text="Design" closable="false">
 							<SplitPane dividerPositions="0.6" prefHeight="160.0" prefWidth="200" orientation="HORIZONTAL">
-								<AnchorPane minHeight="0.0" minWidth="0.0" prefHeight="300.0" prefWidth="500.0">
+								<AnchorPane fx:id="imageViewRoot" minHeight="0.0" minWidth="0.0">
 									<BorderPane AnchorPane.bottomAnchor="0.0" AnchorPane.leftAnchor="0.0" AnchorPane.rightAnchor="0.0" AnchorPane.topAnchor="0.0">
 										<center>
 											<AnchorPane>

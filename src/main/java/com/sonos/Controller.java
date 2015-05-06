@@ -3,16 +3,17 @@ package com.sonos;
 import javafx.collections.*;
 import javafx.event.ActionEvent;
 import javafx.fxml.FXML;
+import javafx.scene.CacheHint;
 import javafx.scene.control.*;
-import javafx.scene.image.ImageView;
+import javafx.scene.image.*;
 import javafx.scene.input.MouseEvent;
+import javafx.scene.layout.AnchorPane;
 import javafx.stage.*;
 import org.apache.commons.scxml2.io.SCXMLReader;
 import org.apache.commons.scxml2.model.*;
 import org.controlsfx.control.PropertySheet;
 import org.controlsfx.dialog.ExceptionDialog;
 import org.json.simple.parser.ParseException;
-import org.w3c.dom.Node;
 
 import javax.xml.stream.XMLStreamException;
 import java.io.*;
@@ -25,6 +26,7 @@ public final class Controller {
 	private final StateMachine stateMachine = new StateMachine();
 	private final ObservableList<PropertySheet.Item> dataModelItems = FXCollections.observableArrayList();
 	private final Properties applicationProps = new Properties();
+	private Path rootDirectory;
 
 	// Shame we can't bind this to the SplitButton items.
 	private final ObservableList<String> mruList = FXCollections.observableArrayList();
@@ -44,6 +46,9 @@ public final class Controller {
 	private TitledPane dataModelPropertiesPane;
 	@FXML
 	private ImageView imageView;
+	@FXML
+	private AnchorPane imageViewRoot;
+
 	private Window mainWindow;
 
 	public boolean eval(String expr) {
@@ -59,24 +64,53 @@ public final class Controller {
 
 		populateTree();
 
+		imageView.setPreserveRatio(true);
+		imageView.fitHeightProperty().bind(imageViewRoot.heightProperty());
+		imageView.fitWidthProperty().bind(imageViewRoot.widthProperty());
+		imageView.setSmooth(true);
+		imageView.setCache(true);
+		imageView.setCacheHint(CacheHint.QUALITY);
+
 		transitionsListView.setItems(stateMachine.activeStatesProperty);
 		transitionsListView.setCellFactory(list -> new TransitionCell(this));
 		transitionsListView.setFocusTraversable(false);
 
-		// Can't be done in fxml because binding must be done at construction.
+		// Can't be done in fxml because binding to dataModelItems must be done at construction.
 		PropertySheet dataModelPropertiesView = new PropertySheet(dataModelItems);
 		dataModelPropertiesPane.setContent(dataModelPropertiesView);
 		dataModelPropertiesView.getStyleClass().add("PropertySheet");
 
-		//splitOpenButton = (SplitMenuButton) scene.lookup("#splitOpenButton");
 		splitOpenButton.setOnMouseClicked(this::onOpenClick);
 
 		stateMachine.activeStatesProperty.addListener((ListChangeListener<StateModel>) change -> {
-			ObservableList<? extends StateModel> list = change.getList();
-			if (!list.isEmpty()) {
-				currentStateLabel.setText(list.get(0).getId());
-			} else {
-				currentStateLabel.setText("<no states>");
+			try {
+				ObservableList<? extends StateModel> list = change.getList();
+				if (!list.isEmpty()) {
+					boolean atLeastOne = false;
+					for (StateModel state : list) {
+						String stateName = state.getId();
+						currentStateLabel.setText(stateName);
+						Path imagePath = rootDirectory.resolve(stateName + ".png");
+						File imageFile = imagePath.toFile();
+						if (imageFile.exists()) {
+							Image image = new Image("file:" + imagePath.toString());
+							imageView.setImage(image);
+							atLeastOne = true;
+							break;
+						}
+					}
+					if (!atLeastOne) {
+						imageView.setImage(null);
+					}
+				} else {
+					imageView.setImage(null);
+					currentStateLabel.setText("<no states>");
+				}
+			} catch (Exception e1) {
+				ExceptionDialog dialog = new ExceptionDialog(e1);
+				dialog.setTitle("Error");
+				dialog.setHeaderText("Error opening image");
+				dialog.showAndWait();
 			}
 		});
 	}
@@ -143,19 +177,18 @@ public final class Controller {
 	private void initialize(String path) throws IOException, ModelException, XMLStreamException, ParseException {
 
 		File file = new File(path);
+		rootDirectory = file.toPath().getParent();
 		SCXML scxml = SCXMLReader.read(file.toURI().toURL());
 		Datamodel dm = scxml.getDatamodel();
 		String jsonPath = null;
 		if (dm != null) {
 			Data data = dm.getData().get(0);
-			Node n = data.getNode();
-			n.getAttributes();
-			jsonPath = n.getLocalName();
+			jsonPath = data.getSrc();
 			if (jsonPath == null) {
 				jsonPath = data.getExpr();
 			}
 			if (jsonPath != null) {
-				Path tmpPath = file.toPath().getParent().resolve(jsonPath);
+				Path tmpPath = rootDirectory.resolve(jsonPath);
 				jsonPath = tmpPath.toString();
 			}
 		}

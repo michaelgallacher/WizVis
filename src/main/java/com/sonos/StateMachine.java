@@ -12,14 +12,12 @@ import javax.script.*;
 import java.io.IOException;
 import java.nio.charset.Charset;
 import java.nio.file.*;
-import java.security.InvalidParameterException;
 import java.util.*;
 
 final class StateMachine {
 	private SCXMLExecutor exec;
 	private ScriptEngine engine;
 	private String dataId;
-
 
 	public ObservableList<StateTreeModel> stateTreeModelProperty = FXCollections.observableArrayList();
 	public final ObservableList<StateModel> activeStatesProperty = new SimpleListProperty<>(FXCollections.observableArrayList());
@@ -133,10 +131,9 @@ final class StateMachine {
 	private void onActiveStatesChanged(EnterableState[] newCurrentStates) {
 		activeStatesProperty.clear();
 		for (EnterableState newState : newCurrentStates) {
-			if (!(newState instanceof TransitionalState)) {
-				throw new InvalidParameterException();
+			if (newState instanceof TransitionalState) {
+				activeStatesProperty.add(new StateModel(newState));
 			}
-			activeStatesProperty.add(new StateModel(newState));
 		}
 
 		activeStatesProperty.sort((o1, o2) -> (o1.getId().length() > o2.getId().length()) ? -1 : (o1.getId().length() < o2.getId().length() ? 1 : 0));
