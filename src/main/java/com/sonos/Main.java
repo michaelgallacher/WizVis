@@ -21,9 +21,6 @@ public class Main extends Application {
 		Parent root = loader.load();
 		controller = loader.getController();
 
-		// must call after the loader
-		controller.loadAppConfig();
-
 		Scene scene = new Scene(root);
 		scene.getStylesheets().add("/default.css");
 
@@ -32,6 +29,9 @@ public class Main extends Application {
 		primaryStage.show();
 
 		controller.setMainWindow(scene.getWindow());
+
+		// must call after everything else is set up.
+		controller.loadAppConfig();
 	}
 
 	public static void main(String[] args) {

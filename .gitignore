@@ -1,4 +1,4 @@
 target
-appConfig
+appConfig.*
 workspace.xml
 vcs.xml

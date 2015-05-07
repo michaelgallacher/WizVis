@@ -2,12 +2,13 @@ package com.sonos;
 
 import javafx.collections.ObservableList;
 import javafx.event.EventHandler;
+import javafx.geometry.Pos;
 import javafx.scene.Node;
 import javafx.scene.control.*;
 import javafx.scene.input.MouseEvent;
 import javafx.scene.layout.*;
 
-class TransitionCell extends ListCell<StateModel> {
+class TransitionCell extends ListCell<TransitionsModel> {
 
 	private final Label stateLabel = new Label();
 	private final VBox transitionItems = new VBox();
@@ -24,7 +25,7 @@ class TransitionCell extends ListCell<StateModel> {
 	}
 
 	@Override
-	protected void updateItem(StateModel item, boolean empty) {
+	protected void updateItem(TransitionsModel item, boolean empty) {
 		// calling super here is very important - don't skip this!
 		super.updateItem(item, empty);
 
@@ -57,26 +58,29 @@ class TransitionCell extends ListCell<StateModel> {
 			getStyleClass().add("TransitionContainer");
 
 			setLeft(eventButton);
-			setCenter(targetLabel);
+
+			AnchorPane anchor = new AnchorPane(targetLabel);
+			setCenter(anchor);
 
 			eventButton.setText(tm.getEvent());
 			eventButton.setOnMouseClicked(ev);
 
 			targetLabel.setText(tm.getTarget());
+			targetLabel.setAlignment(Pos.CENTER_LEFT);
 			targetLabel.minHeightProperty().bind(eventButton.heightProperty());
 			targetLabel.getStyleClass().add("targetnamelabel");
 
 			String condition = tm.getCond();
 			if (condition != null) {
-				boolean eval = controller.eval(condition);
+				boolean eval = controller.isExpressionTrue(condition);
+
 				eventButton.setDisable(!eval);
-				conditionLabel.setVisible(!eval);
 				conditionLabel.setText(condition);
-				if (!eval) {
-					setBottom(conditionLabel);
-				}
+				setBottom(conditionLabel);
 			} else {
 				eventButton.setDisable(false);
+				conditionLabel.setText("");
+				setBottom(null);
 			}
 		}
 	}

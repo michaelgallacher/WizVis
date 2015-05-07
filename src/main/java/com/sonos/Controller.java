@@ -15,12 +15,16 @@ import org.controlsfx.control.PropertySheet;
 import org.controlsfx.dialog.ExceptionDialog;
 import org.json.simple.parser.ParseException;
 
+import javax.script.ScriptException;
 import javax.xml.stream.XMLStreamException;
 import java.io.*;
 import java.nio.file.*;
 import java.util.*;
 import java.util.stream.Collectors;
 
+/**
+ * Class to handle mapping the state machine model to the UI.
+ */
 public final class Controller {
 	private static final int MAX_MRU_SIZE = 10;
 	private final StateMachine stateMachine = new StateMachine();
@@ -28,8 +32,13 @@ public final class Controller {
 	private final Properties applicationProps = new Properties();
 	private Path rootDirectory;
 
+	private final String CONFIG_FILE_NAME = "appConfig.properties";
+	private final String CONFIG_APP_FRAME = "appFrame";
+	private final String CONFIG_STATE_TRANSITION_DIVIDER = "stateTransitionDivider";
+
 	// Shame we can't bind this to the SplitButton items.
 	private final ObservableList<String> mruList = FXCollections.observableArrayList();
+
 	@FXML
 	private TextArea logWindow;
 	@FXML
@@ -37,7 +46,7 @@ public final class Controller {
 	@FXML
 	private TreeView<String> statesTreeView;
 	@FXML
-	private ListView<StateModel> transitionsListView;
+	private ListView<TransitionsModel> transitionsListView;
 	@FXML
 	private Label currentStateLabel;
 	@FXML
@@ -48,18 +57,43 @@ public final class Controller {
 	private ImageView imageView;
 	@FXML
 	private AnchorPane imageViewRoot;
+	@FXML
+	private SplitPane stateTransitionSplitPane;
+	@FXML
+	private Accordion statesPropertiesView;
 
 	private Window mainWindow;
 
-	public boolean eval(String expr) {
-		return stateMachine.eval(expr);
+	/**
+	 * Passthrough to the state machine call.
+	 */
+	public boolean isExpressionTrue(String expr) {
+		try {
+			if (expr == null) {
+				expr = "<null>";
+				throw new NullPointerException();
+			}
+			return stateMachine.isExpressionTrue(expr);
+		} catch (Exception e) {
+			showException(e, "Error checking expression: " + expr);
+		}
+		return false;
 	}
 
+	/**
+	 * Passthrough to the state machine call.
+	 */
 	public void fireEvent(String event) {
-		stateMachine.fireEvent(event);
+		try {
+			stateMachine.fireEvent(event);
+		} catch (Exception e) {
+			showException(e, "Error firing update event.");
+		}
 	}
 
-	// Called by the FXMLLoader
+	/**
+	 * Called by the FXMLLoader.
+	 */
 	public void initialize() {
 
 		populateTree();
@@ -79,40 +113,45 @@ public final class Controller {
 		PropertySheet dataModelPropertiesView = new PropertySheet(dataModelItems);
 		dataModelPropertiesPane.setContent(dataModelPropertiesView);
 		dataModelPropertiesView.getStyleClass().add("PropertySheet");
+		statesPropertiesView.setExpandedPane(dataModelPropertiesPane);
 
 		splitOpenButton.setOnMouseClicked(this::onOpenClick);
 
-		stateMachine.activeStatesProperty.addListener((ListChangeListener<StateModel>) change -> {
-			try {
-				ObservableList<? extends StateModel> list = change.getList();
-				if (!list.isEmpty()) {
-					boolean atLeastOne = false;
-					for (StateModel state : list) {
-						String stateName = state.getId();
-						currentStateLabel.setText(stateName);
-						Path imagePath = rootDirectory.resolve(stateName + ".png");
-						File imageFile = imagePath.toFile();
-						if (imageFile.exists()) {
-							Image image = new Image("file:" + imagePath.toString());
-							imageView.setImage(image);
-							atLeastOne = true;
-							break;
-						}
+		stateMachine.activeStatesProperty.addListener(this::onStateModelsChanged);
+	}
+
+	/**
+	 * Refresh the UI when the active states change in some way.
+	 *
+	 * @param change Describes the change to the list.
+	 */
+	private void onStateModelsChanged(ListChangeListener.Change<? extends TransitionsModel> change) {
+		try {
+			ObservableList<? extends TransitionsModel> list = change.getList();
+			if (!list.isEmpty()) {
+				boolean atLeastOne = false;
+				for (TransitionsModel state : list) {
+					String stateName = state.getId();
+					currentStateLabel.setText(stateName);
+					Path imagePath = rootDirectory.resolve(stateName + ".png");
+					File imageFile = imagePath.toFile();
+					if (imageFile.exists()) {
+						Image image = new Image("file:" + imagePath.toString());
+						imageView.setImage(image);
+						atLeastOne = true;
+						break;
 					}
-					if (!atLeastOne) {
-						imageView.setImage(null);
-					}
-				} else {
-					imageView.setImage(null);
-					currentStateLabel.setText("<no states>");
 				}
-			} catch (Exception e1) {
-				ExceptionDialog dialog = new ExceptionDialog(e1);
-				dialog.setTitle("Error");
-				dialog.setHeaderText("Error opening image");
-				dialog.showAndWait();
+				if (!atLeastOne) {
+					imageView.setImage(null);
+				}
+			} else {
+				imageView.setImage(null);
+				currentStateLabel.setText("<no states>");
 			}
-		});
+		} catch (Exception e1) {
+			showException(e1, "error displaying image.");
+		}
 	}
 
 	/**
@@ -128,7 +167,11 @@ public final class Controller {
 	 * Read the user's configuration
 	 */
 	void loadAppConfig() {
-		try (FileInputStream in = new FileInputStream("appConfig")) {
+		if (!(new File(CONFIG_FILE_NAME).exists())) {
+			return;
+		}
+
+		try (FileInputStream in = new FileInputStream(CONFIG_FILE_NAME)) {
 			applicationProps.load(in);
 
 			// load our mru list
@@ -139,12 +182,23 @@ public final class Controller {
 				}
 				mruList.add(pathStr);
 			}
-
 			populateMRU(mruList);
+
+			// Set splitters
+			String stateTransitionDivider = applicationProps.getProperty(CONFIG_STATE_TRANSITION_DIVIDER);
+			stateTransitionSplitPane.setDividerPosition(0, Double.parseDouble(stateTransitionDivider));
+
+			// update the app location (x,y,w,h)
+			String rect = applicationProps.getProperty(CONFIG_APP_FRAME);
+			String[] values = rect.split(",");
+			mainWindow.setX(Double.parseDouble(values[0]));
+			mainWindow.setY(Double.parseDouble(values[1]));
+			mainWindow.setWidth(Double.parseDouble(values[2]));
+			mainWindow.setHeight(Double.parseDouble(values[3]));
 
 		} catch (Exception e) {
 			// Finished reading properties.
-			//e.printStackTrace();
+			showException(e, "Error reading user configuration.");
 		}
 	}
 
@@ -155,8 +209,20 @@ public final class Controller {
 	 */
 	void saveAppConfig() throws Exception {
 		System.out.println("saving appConfig");
+
+		// Main window location
+		String rect = String.format("%f,%f,%f,%f", mainWindow.getX(), mainWindow.getY(), mainWindow.getWidth(), mainWindow.getHeight());
+		applicationProps.setProperty(CONFIG_APP_FRAME, rect);
+
+		// Splitters
+		if (stateTransitionSplitPane.getDividerPositions().length > 0) {
+			Double divider = stateTransitionSplitPane.getDividerPositions()[0];
+			applicationProps.setProperty(CONFIG_STATE_TRANSITION_DIVIDER, divider.toString());
+		}
+
+		// MRU
 		if (!mruList.isEmpty()) {
-			try (FileOutputStream outStream = new FileOutputStream("appConfig")) {
+			try (FileOutputStream outStream = new FileOutputStream(CONFIG_FILE_NAME)) {
 				int COUNT = Math.min(MAX_MRU_SIZE, mruList.size());
 				for (int i = 0; i < COUNT; i++) {
 					applicationProps.setProperty("MRU" + i, mruList.get(i));
@@ -173,7 +239,6 @@ public final class Controller {
 		parent.setExpanded(true);
 	}
 
-	@SuppressWarnings("unchecked")
 	private void initialize(String path) throws IOException, ModelException, XMLStreamException, ParseException {
 
 		File file = new File(path);
@@ -196,11 +261,21 @@ public final class Controller {
 		stateMachine.initialize(scxml, jsonPath);
 
 		dataModelItems.clear();
-		Set<Map.Entry> entries = stateMachine.getDatamodelJSON().entrySet();
-		for (Map.Entry entry : entries) {
-			PropertySheet.Item item = new DataModelProperty(stateMachine, entry.getKey().toString(), entry.getValue().toString(), String.class);
-			dataModelItems.add(item);
+		if (jsonPath != null) {
+			Set<Map.Entry> entries = stateMachine.getDatamodelJSON().entrySet();
+			for (Map.Entry entry : entries) {
+				PropertySheet.Item item = new DataModelProperty(stateMachine, entry.getKey().toString(), entry.getValue().toString(), String.class);
+				dataModelItems.add(item);
+			}
+			dataModelItems.sort((d1, d2) -> d1.getName().compareTo(d2.getName()));
 		}
+	}
+
+	private void showException(Exception e, String title) {
+		ExceptionDialog dialog = new ExceptionDialog(e);
+		dialog.setTitle("Error");
+		dialog.setHeaderText(title);
+		dialog.showAndWait();
 	}
 
 	private void onMenuItemClick(ActionEvent e) {
@@ -241,10 +316,7 @@ public final class Controller {
 			populateTree();
 
 		} catch (Exception e1) {
-			ExceptionDialog dialog = new ExceptionDialog(e1);
-			dialog.setTitle("Error");
-			dialog.setHeaderText("Error while opening: " + path);
-			dialog.showAndWait();
+			showException(e1, "Error opening " + path);
 		}
 	}
 
@@ -270,7 +342,7 @@ public final class Controller {
 		statesTreeView.setRoot(root);
 	}
 
-	private static final class DataModelProperty implements PropertySheet.Item {
+	private final class DataModelProperty implements PropertySheet.Item {
 
 		private final Class<?> dataType;
 		private final String dataId;
@@ -310,10 +382,21 @@ public final class Controller {
 		}
 
 		@Override
-		public void setValue(Object o) {
-			if (!dataValue.equals(o)) {
-				stateMachine.getEngine().put(getName(), o);
-				stateMachine.refresh();
+		public void setValue(Object val) {
+			String name = getName();
+			try {
+				if (name == null) {
+					name = "<null>";
+					throw new NullPointerException();
+				}
+				if (val == null) {
+					val = "<null>";
+					throw new NullPointerException();
+				}
+
+				stateMachine.assignDataValue(getName(), val);
+			} catch (ScriptException e) {
+				showException(e, "Error assigning " + val.toString() + " to " + name);
 			}
 		}
 	}
